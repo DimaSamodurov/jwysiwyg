@@ -1,7 +1,7 @@
 /**
  * WYSIWYG - jQuery plugin 0.97
  * (0.97.2 - From infinity)
- *
+ * (0.97.n - From DimaSamodurov added getOutput, added 'exec' callback.
  * Copyright (c) 2008-2009 Juan M Martinez, 2010-2011 Akzhan Abdulin and all contributors
  * https://github.com/akzhan/jwysiwyg
  *
@@ -489,7 +489,7 @@
 		};
 
 		this.defaults = {
-html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" style="margin:0"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body style="margin:0;">INITIAL_CONTENT</body></html>',
+			html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body style="margin: 3px;">INITIAL_CONTENT</body></html>',
 			debug: false,
 			controls: {},
 			css: {},
@@ -1065,12 +1065,48 @@ html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.o
 			}
 		};
 
+        // returns raw innerHtml of the editor + possible user wrapper
 		this.getContent = function () {
 			if (this.viewHTML) {
 				this.setContent(this.original.value);
 			}
 			return this.events.filter('getContent', this.editorDoc.body.innerHTML);
 		};
+
+        // returns innertHtml processed accordingly to options
+        this.getOutput = function(){
+            var content, newContent;
+
+            content = this.getContent();
+
+            if (this.options.rmUnwantedBr) {
+                content = content.replace(/<br\/?>$/, "");
+            }
+
+            if (this.options.replaceDivWithP) {
+                newContent = $("<div/>").addClass("temp").append(content);
+
+                newContent.children("div").each(function () {
+                    var element = $(this), p = element.find("p"), i;
+
+                    if (0 === p.length) {
+                        p = $("<p></p>");
+
+                        if (this.attributes.length > 0) {
+                            for (i = 0; i < this.attributes.length; i += 1) {
+                                p.attr(this.attributes[i].name, element.attr(this.attributes[i].name));
+                            }
+                        }
+
+                        p.append(element.html());
+
+                        element.replaceWith(p);
+                    }
+                });
+                content = newContent.html();
+            }
+            return content;
+        }
 		
 		/**
 		 * A jWysiwyg specific event system.
@@ -1658,37 +1694,7 @@ html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.o
 				return; // no need
 			}
 			if (this.original) {
-				var content, newContent;
-
-				content = this.getContent();
-
-				if (this.options.rmUnwantedBr) {
-					content = content.replace(/<br\/?>$/, "");
-				}
-
-				if (this.options.replaceDivWithP) {
-					newContent = $("<div/>").addClass("temp").append(content);
-
-					newContent.children("div").each(function () {
-						var element = $(this), p = element.find("p"), i;
-
-						if (0 === p.length) {
-							p = $("<p></p>");
-
-							if (this.attributes.length > 0) {
-								for (i = 0; i < this.attributes.length; i += 1) {
-									p.attr(this.attributes[i].name, element.attr(this.attributes[i].name));
-								}
-							}
-
-							p.append(element.html());
-
-							element.replaceWith(p);
-						}
-					});
-					
-					content = newContent.html();
-				}
+				var content = this.getOutput();
 
 				$(this.original).val(content);
 
@@ -1728,6 +1734,11 @@ html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.o
 			if (this.options.autoSave) {
 				this.autoSaveFunction();
 			}
+            // <monkey patch>
+			if (this.options.events.exec) {
+				this.options.events.exec(name);
+			}
+            //  </monkey patch>
 		};
 
 		this.triggerControlCallback = function (name) {
@@ -1843,6 +1854,16 @@ html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.o
 			}
 
 			return oWysiwyg.getContent();
+		},
+        
+        getOutput: function (object) {
+			var oWysiwyg = object.data("wysiwyg");
+
+			if (!oWysiwyg) {
+				return undefined;
+			}
+
+			return oWysiwyg.getOutput();
 		},
 
 		init: function (object, options) {
@@ -2203,7 +2224,7 @@ html: '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.o
 
 					that._$dialog = $('<div></div>').attr('title', this.options.title).html(content);
 
-					var dialogHeight = this.options.height == 'auto' ? 300 : this.options.height,
+					var dialogHeight = this.options.height == 'auto' ? 400 : this.options.height,
 						dialogWidth = this.options.width == 'auto' ? 450 : this.options.width;
 
 					// console.log(that._$dialog);
